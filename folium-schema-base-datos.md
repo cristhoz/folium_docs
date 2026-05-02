@@ -1,7 +1,7 @@
 # Folium — Schema de Base de Datos
 ## Documentación técnica del modelo de datos
 
-**Versión:** 1.0
+**Versión:** 1.1
 **Fecha:** Mayo 2026
 **Proyecto:** Folium — foliumhq.co
 **Confidencial — Uso interno**
@@ -142,6 +142,34 @@ CREATE TABLE user_roles (
     PRIMARY KEY (user_id, role_id)
 );
 ```
+
+#### `sessions`
+
+Representa una sesión activa de usuario. El JWT de acceso es stateless, pero el `jti` almacenado aquí permite su revocación inmediata (logout, cambio de contraseña, bloqueo de cuenta). El refresh token nunca se almacena en texto plano.
+
+```sql
+CREATE TABLE sessions (
+    id           UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id    UUID        NOT NULL,
+    user_id      UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token_hash   TEXT        NOT NULL UNIQUE,
+                 -- SHA-256 del refresh token — nunca en texto plano
+    jti          UUID        NOT NULL UNIQUE,
+                 -- JWT ID del access token asociado; permite revocación inmediata antes de su expiración
+    user_agent   TEXT,
+    ip_address   INET,
+    expires_at   TIMESTAMPTZ NOT NULL,
+    revoked      BOOLEAN     NOT NULL DEFAULT false,
+    revoked_at   TIMESTAMPTZ,
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_sessions_user_id    ON sessions (user_id);
+CREATE INDEX idx_sessions_token_hash ON sessions (token_hash);
+CREATE INDEX idx_sessions_jti        ON sessions (jti);
+```
+
+---
 
 #### `audit_logs`
 
@@ -613,6 +641,7 @@ tenants (public)
             │
             ├── departments ◄──────────────────────────┐
             │       └── users ──── user_roles ── roles  │
+            │               └── sessions                │
             │                                           │
             ├── document_types                          │
             ├── reception_channels                      │
