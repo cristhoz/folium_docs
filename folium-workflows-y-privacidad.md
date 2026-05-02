@@ -1,8 +1,8 @@
-# Orfeo SaaS — Flujos de Trabajo y Privacidad de Datos
+# Folium — Flujos de Trabajo y Privacidad de Datos
 ## Base de conocimiento técnica y normativa
 
 **Fecha:** Abril 2026  
-**Proyecto:** Orfeo SaaS  
+**Proyecto:** Folium  
 **Confidencial — Uso interno**
 
 ---
@@ -11,7 +11,7 @@
 
 ### 1.1 Por qué no BPMN (todavía)
 
-BPMN (Business Process Model and Notation) es el estándar internacional para modelar procesos. Sin embargo, para el contexto de Orfeo SaaS en su etapa actual **no es la opción correcta** por tres razones:
+BPMN (Business Process Model and Notation) es el estándar internacional para modelar procesos. Sin embargo, para el contexto de Folium en su etapa actual **no es la opción correcta** por tres razones:
 
 1. **Complejidad operacional** — implementar un motor BPMN propio en Go son meses de trabajo; los motores externos (Camunda, Zeebe) añaden dependencias críticas.
 2. **Perfil del usuario** — los administradores de entidades públicas colombianas no están capacitados para modelar procesos con diagramas BPMN.
@@ -201,17 +201,17 @@ func tieneRol(rolesUsuario, rolesRequeridos []string) bool {
 
 La **Ley Estatutaria 1581 de 2012** es la ley colombiana de protección de datos personales. Es el equivalente colombiano al GDPR europeo. Está reglamentada por el **Decreto 1377 de 2013** y su cumplimiento es supervisado por la **Superintendencia de Industria y Comercio (SIC)**.
 
-Aplica a cualquier organización que recolecte, almacene, use o transfiera datos personales de ciudadanos colombianos — lo que incluye directamente a Orfeo SaaS, ya que cada radicado contiene datos personales del remitente.
+Aplica a cualquier organización que recolecte, almacene, use o transfiera datos personales de ciudadanos colombianos — lo que incluye directamente a Folium, ya que cada radicado contiene datos personales del remitente.
 
 ---
 
 ### 2.2 Conceptos clave
 
-| Término | Definición en contexto de Orfeo SaaS |
+| Término | Definición en contexto de Folium |
 |---------|--------------------------------------|
 | **Titular** | El ciudadano o funcionario cuyos datos se registran en el radicado |
 | **Responsable** | La entidad pública cliente (la que contrata el sistema) |
-| **Encargado** | Orfeo SaaS como plataforma (procesa datos en nombre del responsable) |
+| **Encargado** | Folium como plataforma (procesa datos en nombre del responsable) |
 | **Dato personal** | Nombre, cédula, teléfono, dirección, email del remitente |
 | **Dato sensible** | Datos de salud, origen étnico, orientación sexual (no aplica en el núcleo) |
 | **Tratamiento** | Toda operación sobre el dato: recolectar, almacenar, usar, transferir, eliminar |
@@ -312,7 +312,7 @@ Esto cumple ambas leyes: el documento institucional se preserva, los datos perso
 
 #### Capa 1 — Aislamiento (desde el POC)
 - Un schema de PostgreSQL por tenant
-- Un bucket de MinIO por tenant
+- Un bucket de Garage por tenant
 - Un bug de código no puede filtrar datos entre clientes
 
 #### Capa 2 — Cifrado selectivo de campos
@@ -323,7 +323,7 @@ Esto cumple ambas leyes: el documento institucional se preserva, los datos perso
 | `email` | HMAC-SHA256 determinístico | Permite búsqueda exacta |
 | `telefono`, `direccion` | AES-256-GCM | Raramente se busca por estos campos |
 | `nombre`, `apellidos` | Sin cifrar en MVP | La búsqueda por nombre es funcionalidad core; se añade tokenización en Fase 2 |
-| Archivos (MinIO) | SSE-S3 con clave por tenant | Cifrado nativo de MinIO |
+| Archivos (Garage) | SSE-S3 con clave por tenant | Cifrado nativo de Garage |
 
 **Por qué HMAC determinístico para campos buscables:**
 
@@ -407,4 +407,4 @@ CREATE POLICY radicados_tenant_isolation ON radicados
 
 ---
 
-*Documento de base de conocimiento — Proyecto Orfeo SaaS. Versión 1.0 — Abril 2026.*
+*Documento de base de conocimiento — Proyecto Folium. Versión 1.0 — Abril 2026.*

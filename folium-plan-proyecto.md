@@ -1,4 +1,4 @@
-# Plan de Proyecto — Orfeo SaaS
+# Plan de Proyecto — Folium
 ## Sistema de Gestión Documental para Entidades Públicas Colombianas
 
 **Versión:** 1.0  
@@ -11,6 +11,10 @@
 ## 1. Visión del Producto
 
 Plataforma SaaS de gestión documental construida desde cero en Go, diseñada nativamente para cumplir con la normativa colombiana del AGN (Archivo General de la Nación). Reemplaza a Orfeo GPL (obsoleto e inseguro) con una solución moderna, segura, escalable y comercialmente sostenible.
+
+**Nombre:** Folium  
+**Dominio principal:** foliumhq.co  
+**Aplicación SaaS:** app.foliumhq.co
 
 ### Principios de diseño
 - **Normativa primero** — cada módulo se diseña con la regulación colombiana como requisito base
@@ -29,7 +33,7 @@ Plataforma SaaS de gestión documental construida desde cero en Go, diseñada na
 | Lenguaje | Go | Rendimiento, seguridad, binario único, ideal para APIs |
 | Framework web | Gin o Echo | Maduros, rápidos, buen ecosistema |
 | Base de datos | PostgreSQL | Multi-tenant por schemas, robusto, open source |
-| Almacenamiento | MinIO | S3-compatible, auto-hospedable, escalable |
+| Almacenamiento | Garage | S3-compatible, auto-hospedable, distribuido — MinIO archivado el 25/04/2026 |
 | Cola de trabajos | Asynq (Redis) | Emails, notificaciones, procesamiento async |
 | Autenticación | JWT + Refresh tokens | Stateless, compatible con SaaS multi-tenant |
 | PDF | gofpdf / go-wkhtmltopdf | Generación de stickers y reportes |
@@ -65,7 +69,7 @@ Plataforma SaaS de gestión documental construida desde cero en Go, diseñada na
 ┌─────────────────────▼────────────────────────────────┐
 │                  API GATEWAY                         │
 │              Nginx / Reverse Proxy                   │
-│         tenant-a.orfeo.co / tenant-b.orfeo.co        │
+│    tenant-a.app.foliumhq.co / tenant-b.app.foliumhq.co    │
 └─────────────────────┬────────────────────────────────┘
                       │
 ┌─────────────────────▼────────────────────────────────┐
@@ -77,7 +81,7 @@ Plataforma SaaS de gestión documental construida desde cero en Go, diseñada na
 └──────┬───────────────────┬───────────────────────────┘
        │                   │
 ┌──────▼──────┐     ┌──────▼──────┐     ┌────────────┐
-│ PostgreSQL  │     │    MinIO    │     │   Redis    │
+│ PostgreSQL  │     │   Garage    │     │   Redis    │
 │ (por schema │     │ (archivos   │     │  (colas y  │
 │  por tenant)│     │  por bucket)│     │   caché)   │
 └─────────────┘     └─────────────┘     └────────────┘
@@ -91,7 +95,7 @@ Plataforma SaaS de gestión documental construida desde cero en Go, diseñada na
 
 ### Multi-tenant
 - Cada cliente (entidad) tiene su propio **schema en PostgreSQL**
-- Cada cliente tiene su propio **bucket en MinIO**
+- Cada cliente tiene su propio **bucket en Garage**
 - El routing por subdominio identifica el tenant en cada request
 - Datos completamente aislados entre clientes
 
@@ -437,7 +441,7 @@ El cliente puede radicar un documento, verlo en la bandeja, imprimirlo y buscarl
 | Competencia (Orfeo NG) | Media | Medio | Diferenciador en precio y soporte local |
 | Deuda técnica temprana | Alta | Medio | Code review disciplinado desde la POC |
 | Brechas de seguridad | Baja | Muy alto | Auditoría de seguridad antes de cada release |
-| Escalabilidad en SaaS | Baja (corto plazo) | Alto | PostgreSQL schemas + MinIO escalan bien |
+| Escalabilidad en SaaS | Baja (corto plazo) | Alto | PostgreSQL schemas + Garage escalan bien |
 
 ---
 
@@ -478,7 +482,7 @@ seguridad/      →  usuarios, roles, permisos
 1. **Definir framework frontend** — según preferencia del desarrollador
 2. **Crear repositorio del proyecto** — estructura base de carpetas Go
 3. **Diseñar esquema de base de datos** — tablas iniciales para la POC
-4. **Levantar entorno de desarrollo** — Docker Compose con Go + PostgreSQL + MinIO
+4. **Levantar entorno de desarrollo** — Docker Compose con Go + PostgreSQL + Garage
 5. **Iniciar Semana 1 de la POC** — autenticación y dependencias
 
 ---
