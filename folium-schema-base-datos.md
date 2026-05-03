@@ -390,6 +390,30 @@ CREATE TABLE record_attachments (
 );
 ```
 
+#### `document_access_logs`
+
+Registro inmutable de cada acceso a un archivo adjunto. Nunca se borran registros de esta tabla. El acceso a archivos se fuerza siempre a través de presigned URLs de corta duración generadas por la aplicación — nunca con rutas directas a Garage — garantizando que cada descarga o visualización quede registrada aquí antes de que la URL sea emitida.
+
+```sql
+CREATE TABLE document_access_logs (
+    id             UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id      UUID        NOT NULL,
+    attachment_id  UUID        NOT NULL REFERENCES record_attachments(id),
+    record_id      UUID        NOT NULL REFERENCES records(id),
+    user_id        UUID        NOT NULL REFERENCES users(id),
+    action         TEXT        NOT NULL,
+                   -- view | download | print | share_link_created
+    ip_address     INET,
+    user_agent     TEXT,
+    created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_doc_access_attachment ON document_access_logs (attachment_id);
+CREATE INDEX idx_doc_access_record     ON document_access_logs (record_id);
+CREATE INDEX idx_doc_access_user       ON document_access_logs (user_id);
+CREATE INDEX idx_doc_access_created_at ON document_access_logs (created_at);
+```
+
 ---
 
 ### 3.6 Workflow — Máquina de estados
@@ -623,7 +647,9 @@ CREATE POLICY tenant_isolation ON record_history
 | PII buscable | HMAC-SHA256 determinístico por tenant (`sender_id_hash`, `sender_email_hash`) |
 | PII no buscable | AES-256-GCM (`sender_phone_enc`, `sender_address_enc`) |
 | Supresión Ley 1581 | Campo `anonymized = true` + borrado de valores PII — **no borrado físico** del radicado |
-| Historial | `record_history` inmutable — nunca se borran filas, cumple trazabilidad AGN |
+| Historial de workflow | `record_history` inmutable — nunca se borran filas, cumple trazabilidad AGN |
+| Trazabilidad de archivos | `document_access_logs` inmutable — registra view/download/print antes de emitir presigned URL |
+| Acceso a archivos | Siempre vía presigned URLs de corta duración generadas por la app — nunca rutas directas a Garage |
 | Workflows | Máquina de estados configurable por tenant (`workflow_templates` → `workflow_states` → `workflow_transitions`) |
 | BPMN | Diferido a Fase 3 vía Temporal.io |
 | Consentimiento | Tabla `data_consents` desde la POC — `id_number_hash` nunca en texto plano |
@@ -656,6 +682,7 @@ tenants (public)
                     │           └── citizen_requests (Fase 2)
                     │
                     ├── record_attachments (→ Garage)
+                    │       └── document_access_logs
                     │
                     ├── record_states ──── workflow_states
                     │                           │

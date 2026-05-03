@@ -379,7 +379,100 @@ CREATE POLICY radicados_tenant_isolation ON radicados
 
 ---
 
-## 3. Resumen de Decisiones Arquitectónicas
+## 3. Trazabilidad de Acceso a Documentos
+
+### 3.1 Principio de diseño
+
+Ningún archivo se sirve con una ruta directa al bucket de Garage. **Todo acceso pasa por la aplicación**, que valida el JWT del usuario, registra el evento en `document_access_logs`, y solo entonces emite una presigned URL de corta duración (TTL recomendado: 60 segundos para vista previa, 300 segundos para descarga).
+
+```
+Usuario solicita ver/descargar un archivo
+            │
+            ▼
+  App valida JWT + permisos sobre el radicado
+            │
+            ▼
+  App registra evento en document_access_logs
+  (attachment_id, user_id, action, ip, user_agent)
+            │
+            ▼
+  App solicita a Garage una presigned URL temporal
+            │
+            ▼
+  App retorna la URL al cliente
+            │
+            ▼
+  Cliente descarga el archivo directamente desde Garage
+  (la URL expira en segundos — no es reutilizable)
+```
+
+### 3.2 Tipos de acción registrados
+
+| `action` | Cuándo se registra |
+|----------|-------------------|
+| `view` | El usuario abre el visor de documento en el navegador |
+| `download` | El usuario descarga el archivo a su equipo |
+| `print` | El usuario usa la función de impresión desde el visor |
+| `share_link_created` | Un usuario con permisos genera un link de acceso externo |
+
+### 3.3 Lógica en Go
+
+```go
+type DocumentAccessService struct {
+    repo    DocumentAccessRepository
+    garage  GarageClient
+}
+
+type PresignedURLRequest struct {
+    AttachmentID uuid.UUID
+    UserID       uuid.UUID
+    Action       string   // "view" | "download" | "print"
+    IPAddress    string
+    UserAgent    string
+}
+
+func (s *DocumentAccessService) GetPresignedURL(ctx context.Context, req PresignedURLRequest) (string, error) {
+    attachment, err := s.repo.GetAttachment(ctx, req.AttachmentID)
+    if err != nil {
+        return "", err
+    }
+
+    // Registrar el acceso ANTES de emitir la URL
+    if err := s.repo.LogAccess(ctx, DocumentAccessLog{
+        TenantID:     attachment.TenantID,
+        AttachmentID: req.AttachmentID,
+        RecordID:     attachment.RecordID,
+        UserID:       req.UserID,
+        Action:       req.Action,
+        IPAddress:    req.IPAddress,
+        UserAgent:    req.UserAgent,
+    }); err != nil {
+        return "", err
+    }
+
+    ttl := 60 * time.Second
+    if req.Action == "download" {
+        ttl = 5 * time.Minute
+    }
+
+    return s.garage.PresignGetObject(ctx, attachment.StorageKey, ttl)
+}
+```
+
+> El log se escribe antes de emitir la URL. Si la generación de la presigned URL falla, el log queda de todas formas — preferible tener un falso positivo que un acceso sin registro.
+
+### 3.4 Hoja de ruta de trazabilidad de documentos
+
+| Fase | Funcionalidad |
+|------|--------------|
+| **POC** | Tabla `document_access_logs` en el modelo. Registro de `view` y `download`. Presigned URLs con TTL corto. |
+| **MVP** | Dashboard de actividad por documento (quién abrió, cuándo). Alertas por acceso fuera de horario o desde IP desconocida. |
+| **Fase 2** | Reporte de auditoría exportable por radicado. Detección de patrones anómalos (descarga masiva, accesos repetidos). |
+| **Fase 3** | Integración con SIEM. Links de acceso externo con expiración configurable y revocación. |
+
+---
+
+## 4. Resumen de Decisiones Arquitectónicas
 
 | Tema | Decisión | Revisión |
 |------|---------|----------|
@@ -391,6 +484,8 @@ CREATE POLICY radicados_tenant_isolation ON radicados
 | Aislamiento base | PostgreSQL schema por tenant + RLS | Desde POC |
 | Supresión de datos | Anonimización (no borrado) por conflicto AGN/1581 | Desde MVP |
 | Consentimiento | Tabla de consentimientos desde el modelo inicial | Desde POC |
+| Trazabilidad de archivos | `document_access_logs` inmutable — log antes de emitir presigned URL | Desde POC |
+| Acceso a Garage | Siempre vía presigned URLs (TTL 60s vista / 5min descarga) — nunca rutas directas | Desde POC |
 
 ---
 
