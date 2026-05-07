@@ -1,6 +1,6 @@
 # Tareas de Implementación — Capa BFF Segura
 
-**Versión:** 1.2 | **Fecha:** Mayo 2026 | **Proyecto:** Folium — foliumhq.co | **Uso interno**
+**Versión:** 1.3 | **Fecha:** Mayo 2026 | **Proyecto:** Folium — foliumhq.co | **Uso interno**
 
 Documento de trabajo derivado de `BFF-arquitectura-front.md`. Cubre todas las tareas necesarias para implementar la capa BFF en Folium bajo estándares MinTIC/OWASP.
 
@@ -41,26 +41,46 @@ Documento de trabajo derivado de `BFF-arquitectura-front.md`. Cubre todas las ta
 ## Backlog Item A — Gestión de Sesiones Token-per-Session
 
 > **Prioridad: Crítica** — Requisito para que el JWT nunca sea expuesto al navegador.
-> **Bloqueado por:** endpoint `POST /api/auth/login` del backend Go (aún pendiente).
+> ~~**Bloqueado por:** endpoint `POST /api/auth/login` del backend Go (aún pendiente).~~
+> **Desbloqueado** — el backend Go tiene la capa de autenticación completa. Ver contrato en `BFF-arquitectura-front.md` §11.
+
+**Contrato del backend Go** (relevante para A.3 y A.3b):
+
+| Dato | Valor |
+|---|---|
+| Endpoint login | `POST /v1/auth/login` |
+| Header obligatorio | `X-Tenant-ID: <uuid>` |
+| Body login | `{ "email": "...", "password": "..." }` |
+| Response login | `{ "access_token": "...", "refresh_token": "..." }` |
+| Endpoint refresh | `POST /v1/auth/refresh` |
+| Body refresh | `{ "refresh_token": "..." }` |
+| Response refresh | `{ "access_token": "...", "refresh_token": "..." }` |
+| Endpoint logout | `POST /v1/auth/logout` (requiere `Authorization: Bearer`) |
+| Body logout | `{ "refresh_token": "..." }` (opcional) |
 
 - [x] **A.1** Instalar: `express-session`, `connect-redis`, `ioredis`
 - [x] **A.2** Configurar Redis como store de sesiones en Express (`connect-redis` + `express-session`)
 - [ ] **A.3** Implementar `POST /auth/login`:
-  - Recibir credenciales del frontend
-  - Hacer proxy al backend Go (`POST /api/auth/login`)
-  - Extraer el JWT de la respuesta del backend
-  - Guardar el JWT en Redis vinculado al `SessionID` (TTL igual al `exp` del JWT)
-  - Devolver al navegador solo una cookie con flags: `HttpOnly`, `Secure`, `SameSite: Strict`
-  - Devolver al frontend el perfil del usuario (nombre, rol, tenantId) — **sin JWT**
+  - Recibir credenciales del frontend (`email`, `password`) y el `tenantId` del perfil activo
+  - Hacer proxy al backend Go: `POST /v1/auth/login` con header `X-Tenant-ID: <uuid>`
+  - Extraer `access_token` y `refresh_token` de la respuesta del backend
+  - Guardar AMBOS tokens en la sesión Redis vinculada al `SessionID` (TTL = duración del `access_token`)
+  - Devolver al navegador solo la cookie `sid` (`HttpOnly`, `Secure`, `SameSite: Strict`)
+  - Devolver al frontend el perfil del usuario (nombre, rol, tenantId) — **sin tokens**
+- [ ] **A.3b** Implementar renovación transparente de tokens en el middleware BFF:
+  - Si el backend Go devuelve `401` por token expirado, el BFF llama a `POST /v1/auth/refresh` con el refresh token almacenado en sesión
+  - Almacena el nuevo par (`access_token`, `refresh_token`) en Redis; reintenta la petición original
+  - Si el refresh también falla (`401`), destruye la sesión y devuelve `401` al navegador
 - [ ] **A.4** Implementar `POST /auth/logout`:
+  - Llamar a `POST /v1/auth/logout` en el backend Go (invalida JTI y sesión en DB)
   - Destruir la sesión en Redis (`req.session.destroy()`)
   - Limpiar la cookie en el navegador
 - [ ] **A.5** Implementar middleware de autenticación BFF:
   - Leer `SessionID` de la cookie `sid`
-  - Resolver el JWT en Redis
-  - Adjuntar `Authorization: Bearer <token>` + `X-Service-Token` a la petición hacia el backend Go
-  - Devolver `401` si la sesión no existe o expiró
-- [ ] **A.6** Implementar `GET /auth/me`: devolver el perfil del usuario de la sesión activa (sin JWT)
+  - Resolver `access_token` y `refresh_token` en Redis
+  - Adjuntar `Authorization: Bearer <access_token>` + `X-Service-Token` a la petición hacia el backend Go
+  - Devolver `401` si la sesión no existe o expiró (y el refresh falló, ver A.3b)
+- [ ] **A.6** Implementar `GET /auth/me`: devolver el perfil del usuario de la sesión activa (sin tokens)
 
 **Criterio de aceptación:** El JWT no es visible en el Application Tab (LocalStorage / Cookies) del navegador en ningún momento.
 
@@ -171,6 +191,7 @@ Documento de trabajo derivado de `BFF-arquitectura-front.md`. Cubre todas las ta
 
 | Versión | Fecha      | Cambio |
 |---------|------------|--------|
+| 1.3     | 2026-05-07 | A.3–A.6 desbloqueados — backend Go auth completo; tabla de contrato del backend; A.3 actualizado con rutas y body reales; nueva tarea A.3b para renovación transparente de tokens |
 | 1.2     | 2026-05-07 | A.1-A.2 marcadas completas; FE.1 marcada completa; nueva sección SSR+Router (completado); nueva sección CI Local; roadmap actualizado (SSR implementado) |
 | 1.1     | 2026-05-07 | Alineación con stack decidido (Vite + React + TypeScript + Zustand) |
 | 1.0     | 2026-04-XX | Versión inicial — backlog de implementación BFF completo |

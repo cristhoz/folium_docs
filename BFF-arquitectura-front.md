@@ -1,4 +1,4 @@
-**Versión:** 1.2 | **Fecha:** Mayo 2026 | **Proyecto:** Folium — foliumhq.co | **Uso interno**
+**Versión:** 1.3 | **Fecha:** Mayo 2026 | **Proyecto:** Folium — foliumhq.co | **Uso interno**
 
 Este documento describe la arquitectura de seguridad y renderizado de la capa **BFF (Backend-for-Frontend)** de Folium, tal como está implementada en el repositorio actual.
 
@@ -95,8 +95,12 @@ Solo el origin configurado (`allowedOrigin`) puede hacer requests con credencial
 
 - Almacenada en Redis con TTL configurable.
 - El navegador recibe solo la cookie `sid` (`HttpOnly; Secure; SameSite=Strict`), firmada con `COOKIE_SECRET`.
-- En cada request autenticado, el BFF resuelve la sesión en Redis, extrae el JWT y lo adjunta como `Authorization: Bearer` en la petición interna hacia Go.
-- **El JWT nunca llega al navegador** ni existe en el estado de React/Zustand ni en `localStorage`.
+- Tras un login exitoso, el BFF recibe del backend Go un par de tokens (`access_token` + `refresh_token`) y almacena **ambos** en la sesión Redis. El navegador solo recibe el perfil del usuario.
+- En cada request autenticado, el BFF resuelve la sesión en Redis, extrae el `access_token` y lo adjunta como `Authorization: Bearer` en la petición interna hacia Go.
+- Si el backend Go devuelve `401` por token expirado, el BFF rota los tokens de forma transparente (llama a `POST /v1/auth/refresh`) y reintenta la petición; si el refresh también falla, invalida la sesión.
+- **Los tokens nunca llegan al navegador** ni existen en el estado de React/Zustand ni en `localStorage`.
+
+Ver detalles del contrato BFF ↔ Backend en `BFF-tareas-implementacion.md` §A.3 y la arquitectura completa del backend en la Sección 11 de este documento.
 
 ### 5.4 Headers (Helmet)
 
@@ -195,10 +199,133 @@ scripts/
 
 ---
 
+---
+
+## 11. Capa de Autenticación — Backend Go
+
+Esta sección documenta la implementación de autenticación del backend Go con el que el BFF se integra. El BFF no replica esta lógica: la delega completamente al backend y solo gestiona la sesión del navegador.
+
+### 11.1 Componentes internos
+
+| Archivo | Responsabilidad |
+|---|---|
+| `pkg/crypto/jwt.go` | Firma (HS256) y verificación JWT; tipo `FoliumClaims` (`sub`, `tid`, `role`, `jti`) |
+| `pkg/cache/redis_blocklist.go` | Lista negra de JTIs revocados; clave `jti:blocked:<jti>` con TTL exacto del token |
+| `internal/domain/auth.go` | Tipos de dominio: `LoginParams`, `NewSessionParams`, `TokenPair` |
+| `internal/service/auth_service.go` | Lógica de negocio: login, refresh con token rotation, logout |
+| `internal/repository/session_repo.go` | Persistencia de sesiones en PostgreSQL (tabla `sessions`) |
+| `internal/middleware/auth.go` | Middleware `RequireAuth`: JWT + blocklist Redis + validación de tenant |
+| `internal/handler/auth.go` | HTTP handlers: login, refresh, logout, me |
+
+### 11.2 Flujo end-to-end
+
+```
+Navegador
+  │  cookie HttpOnly (sid)
+  ▼
+BFF Express
+  │  Authorization: Bearer <access_token>
+  │  X-Tenant-ID: <uuid>
+  │  X-Service-Token: <secreto interno>
+  ▼
+Backend Go (Chi)
+  │
+  ├─ middleware RequireAuth
+  │    ├─ ParseToken (HS256)
+  │    ├─ IsBlocked (Redis) ← fail-closed
+  │    └─ valida X-Tenant-ID vs claim tid
+  │
+  └─ handler auth_service
+       ├─ UserStore (PostgreSQL)
+       ├─ SessionStore (PostgreSQL, tabla sessions)
+       └─ Blocklist (Redis)
+```
+
+### 11.3 Diagramas de secuencia
+
+#### Login
+
+```
+BFF                    auth_service             UserStore / SessionStore
+ │──POST /v1/auth/login──►│                              │
+ │  X-Tenant-ID: <uuid>   │──GetByEmail(email, tenant)─►│
+ │                         │◄─────────────────────────── │
+ │                         │  bcrypt.CompareHash()        │
+ │                         │──createTokenPair()           │
+ │                         │    genera JTI (UUID v4)      │
+ │                         │    firma access_token (HS256)│
+ │                         │    genera refresh (UUID v4)  │
+ │                         │──SessionStore.Create()──────►│
+ │                         │    token_hash = sha256(refresh)
+ │                         │──UpdateLastLogin() ·best-effort·
+ │◄──200 { access_token, refresh_token }──────────────────│
+```
+
+#### Refresh (token rotation)
+
+```
+BFF                    auth_service             SessionStore / Blocklist
+ │──POST /v1/auth/refresh──►│                         │
+ │  { refresh_token }        │  sha256(refresh_token) │
+ │                           │──GetByTokenHash()─────►│
+ │                           │◄───────────────────────│
+ │                           │  valida expires_at      │
+ │                           │──Revoke(session)───────►│  (PostgreSQL)
+ │                           │──Block(jti, ttl)───────►│  (Redis, TTL del access anterior)
+ │                           │──createTokenPair()       │  (nuevo par)
+ │◄──200 { access_token, refresh_token }────────────── │
+```
+
+#### Logout
+
+```
+BFF            RequireAuth            auth_service     Blocklist / SessionStore
+ │──POST /v1/auth/logout──►│                  │               │
+ │  Authorization: Bearer   │                 │               │
+ │                          │ ParseToken()    │               │
+ │                          │ IsBlocked()────►│               │
+ │                          │ valida tenant   │               │
+ │                          │ inyecta claims  │               │
+ │                          │─────────────────►─Block(jti, ttl_restante)──►│  (Redis)
+ │                          │                 │─Revoke(session)────────────►│  (PostgreSQL, si hay refresh_token)
+ │◄──200 OK─────────────────│                 │               │
+```
+
+### 11.4 Referencia de endpoints
+
+| Método | Path | Acceso | Request body | Response 200 | Códigos posibles |
+|---|---|---|---|---|---|
+| POST | `/v1/auth/login` | Público | `{ email, password }` + header `X-Tenant-ID` | `{ access_token, refresh_token }` | 200, 400, 401, 500 |
+| POST | `/v1/auth/refresh` | Público | `{ refresh_token }` | `{ access_token, refresh_token }` | 200, 401, 500 |
+| POST | `/v1/auth/logout` | Protegido (`RequireAuth`) | `{ refresh_token }` (opcional) | `{}` | 200, 401, 500 |
+| GET | `/v1/auth/me` | Protegido (`RequireAuth`) | — | `{ user_id, tenant_id, role }` | 200, 401, 500 |
+
+**Nota:** `400` en login se produce si `X-Tenant-ID` está ausente o no es un UUID válido.
+
+### 11.5 Decisiones de diseño
+
+**Fail-closed en Redis (`RequireAuth`)**
+Si Redis falla al consultar `IsBlocked`, el middleware devuelve `401` en lugar de permitir el acceso. Prioriza la seguridad sobre la disponibilidad: un token revocado podría pasar si se degradara a fail-open.
+
+**Token rotation en Refresh**
+Al refrescar, la sesión anterior se revoca en PostgreSQL y el JTI del access token anterior se bloquea en Redis durante su TTL restante. Cierra la ventana donde un access token válido podría reutilizarse tras el refresh.
+
+**Hash SHA-256 del refresh token**
+El refresh token (UUID v4) nunca se almacena en texto plano. Solo su `sha256` hex se guarda en la tabla `sessions`. Limita el impacto de un dump de la base de datos.
+
+**Validación cruzada de tenant en el middleware**
+Si el request incluye el header `X-Tenant-ID`, el middleware valida que coincida con el claim `tid` del JWT. Previene que un token válido de un tenant se use en el contexto de otro.
+
+**Revocación granular por JTI**
+La blocklist usa el claim `jti` (UUID único por token). Permite revocar tokens individuales sin invalidar la clave secreta ni todas las sesiones del usuario.
+
+---
+
 ## Changelog
 
 | Versión | Fecha      | Cambio |
 |---------|------------|--------|
+| 1.3     | 2026-05-07 | §5.3 actualizada (dos tokens, renovación transparente); nueva §11 con arquitectura completa de autenticación Go (componentes, flujos, diagramas, endpoints, decisiones de diseño) |
 | 1.2     | 2026-05-07 | Reescritura mayor: stack con versiones exactas, SSR híbrido implementado, TanStack Router, estructura de carpetas, scripts, seguridad detallada, Pino, configuración YAML; roadmap actualizado |
 | 1.1     | 2026-05-07 | Zustand añadido como gestor de estado; alineación con decisión de stack |
 | 1.0     | 2026-04-XX | Versión inicial — arquitectura BFF con React + Vite + TypeScript |

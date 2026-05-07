@@ -1,6 +1,6 @@
 # Folium — Roadmap de Tareas
 
-**Versión:** 1.1 | **Fecha:** 2026-05-07 | **Proyecto:** Folium — foliumhq.co | **Uso interno**
+**Versión:** 1.2 | **Fecha:** 2026-05-07 | **Proyecto:** Folium — foliumhq.co | **Uso interno**
 
 > Documento vivo. Fuente de verdad del estado de ejecución del proyecto.  
 > Los detalles técnicos de cada tarea viven en sus documentos fuente (ver referencias al pie).
@@ -11,10 +11,11 @@
 
 | Área | Progreso | Próxima acción |
 |------|----------|----------------|
-| Backend Go — POC | 🟡 En curso | Autenticación JWT |
+| Backend Go — Auth | ✅ Completo | — |
+| Backend Go — POC | 🟡 En curso | Multi-tenant, CRUD, radicación |
 | BFF — Config base | ✅ Completo | — |
 | BFF — SSR híbrido | ✅ Completo | — |
-| BFF — Sesiones (A) | 🟡 En curso | A.3 POST /auth/login (bloqueado por backend Go) |
+| BFF — Sesiones (A) | 🟡 En curso | A.3–A.6 listos para implementar |
 | BFF — Headers (B) | 🟡 Casi listo | B.5 verificar securityheaders.com |
 | BFF — CSRF (C) | 🟡 Casi listo | C.6 integrar CSRF en client.ts |
 | BFF — Docs (D) | 🔴 Pendiente | D.1 validación MIME-type |
@@ -47,12 +48,21 @@
 - [x] C.5 BFF rechaza mutaciones sin `X-CSRF-Token` válido (`403`)
 - [ ] **C.6** Actualizar `app/services/client.ts`: obtener token CSRF al iniciar, adjuntarlo en mutaciones, manejar `419` con reintento
 
+### Backend Go — Auth *(completado)*
+- [x] Autenticación JWT con roles básicos (`pkg/crypto/jwt.go` — HS256, `FoliumClaims`)
+- [x] Blocklist de JTIs en Redis — fail-closed (`pkg/cache/redis_blocklist.go`)
+- [x] Tipos de dominio de autenticación (`internal/domain/auth.go`)
+- [x] Servicio de autenticación — login, refresh con token rotation, logout (`internal/service/auth_service.go`)
+- [x] Repositorio de sesiones en PostgreSQL (`internal/repository/session_repo.go`)
+- [x] Middleware `RequireAuth` — validación JWT + blocklist + tenant (`internal/middleware/auth.go`)
+- [x] Handlers HTTP — login, refresh, logout, me (`internal/handler/auth.go`)
+- [x] Endpoints: `POST /v1/auth/login`, `POST /v1/auth/refresh`, `POST /v1/auth/logout`, `GET /v1/auth/me`
+
 ### Backend Go — POC
 - [x] Estructura base del proyecto en Go
-- [ ] **Autenticación JWT con roles básicos**
 - [ ] Multi-tenant básico (2 tenants de demo)
 - [ ] CRUD de dependencias y usuarios
-- [ ] Endpoint `POST /api/auth/login` con respuesta JWT (contrato con BFF)
+- [ ] Endpoint radicación de entrada (integración con Garage)
 
 ### Frontend — Ajustes post-BFF
 - [x] **FE.1** `useAuthStore` (Zustand 5): sin JWT, guarda `{ userId, nombre, rol, dependencia, tenantId }`
@@ -172,6 +182,11 @@
 | Cache/colas: Valkey (Redis descartado en producción) | 2026-04-XX |
 | Schema de BD: multi-tenant por schema + RLS | 2026-05-XX |
 | Estructura base del proyecto en Go | 2026-05-XX |
+| Backend Go — Autenticación JWT completa: login, refresh, logout, me (`/v1/auth/*`) | 2026-05-07 |
+| Backend Go — Middleware `RequireAuth`: verificación JWT + blocklist Redis (fail-closed) + validación cruzada tenant | 2026-05-07 |
+| Backend Go — Token rotation en refresh + hash SHA-256 del refresh token en DB | 2026-05-07 |
+| Backend Go — Blocklist JTI con TTL exacto en Redis (`pkg/cache/redis_blocklist.go`) | 2026-05-07 |
+| Backend Go — Repositorio de sesiones en PostgreSQL (tabla `sessions`) | 2026-05-07 |
 | BFF — Config base del servidor (0.1–0.6) | 2026-05-XX |
 | BFF — Headers de seguridad (B.1–B.4) | 2026-05-07 |
 | BFF — Protección Anti-CSRF (C.1–C.5) | 2026-05-07 |
@@ -204,5 +219,6 @@
 
 | Versión | Fecha      | Cambio |
 |---------|------------|--------|
+| 1.2     | 2026-05-07 | Backend Go — Auth marcado ✅ completo; BFF Sesiones desbloqueado; sección Auth completada en Sprint Actual; 5 nuevas entradas en ✅ Completado |
 | 1.1     | 2026-05-07 | A.1-A.2 y FE.1 marcadas completas; nueva sección SSR en estado rápido; 9 nuevas entradas en ✅ Completado; React Islands movido a Fase 3 |
 | 1.0     | 2026-05-07 | Creación del roadmap consolidado; estados iniciales según progreso real |
