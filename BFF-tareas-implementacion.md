@@ -1,5 +1,7 @@
 # Tareas de Implementación — Capa BFF Segura
 
+**Versión:** 1.2 | **Fecha:** Mayo 2026 | **Proyecto:** Folium — foliumhq.co | **Uso interno**
+
 Documento de trabajo derivado de `BFF-arquitectura-front.md`. Cubre todas las tareas necesarias para implementar la capa BFF en Folium bajo estándares MinTIC/OWASP.
 
 ---
@@ -8,21 +10,41 @@ Documento de trabajo derivado de `BFF-arquitectura-front.md`. Cubre todas las ta
 
 | # | Tarea | Prioridad |
 |---|-------|-----------|
-| 0.1 | Inicializar proyecto Node.js + TypeScript en `folium_bff/` (o como workspace dentro del monorepo frontend) | Crítica |
-| 0.2 | Instalar dependencias base: `express`, `typescript`, `ts-node`, `@types/express` | Crítica |
-| 0.3 | Integrar Vite como middleware de Express para desarrollo (`vite.createServer` + `server.middlewares`) | Crítica |
-| 0.4 | Configurar modo producción: Express sirve el build estático de Vite (`dist/`) | Alta |
-| 0.5 | Añadir servicio `folium_bff` y `redis` al `docker-compose.yml` del proyecto | Crítica |
-| 0.6 | Definir variables de entorno del BFF: `REDIS_URL`, `SESSION_SECRET`, `X_SERVICE_TOKEN`, `BACKEND_URL`, `PORT` | Crítica |
+| ~~0.1~~ | ~~Inicializar proyecto Node.js + TypeScript en `folium_bff/`~~ | ✅ |
+| ~~0.2~~ | ~~Instalar dependencias base: `express`, `typescript`, `ts-node`, `@types/express`~~ | ✅ |
+| ~~0.3~~ | ~~Integrar Vite como middleware de Express para desarrollo~~ | ✅ |
+| ~~0.4~~ | ~~Configurar modo producción: Express sirve el build estático de Vite (`dist/`)~~ | ✅ |
+| ~~0.5~~ | ~~Añadir servicio `folium_bff` y `redis` al `docker-compose.yml` del proyecto~~ | ✅ |
+| ~~0.6~~ | ~~Definir variables de entorno del BFF~~ | ✅ |
+
+---
+
+## SSR + Router (Completado)
+
+- [x] Implementar `app/entry-server.tsx` (renderToString + TanStack Router + createMemoryHistory)
+- [x] Implementar `app/entry-client.tsx` (hidratación en el cliente)
+- [x] Middleware `api/middlewares/vite-dev-resolve.ts` (dev: Vite HMR vía `ssrLoadModule`)
+- [x] Middleware `api/middlewares/vite-prod-resolve.ts` (prod: bundles desde `dist/client` + `dist/server`)
+- [x] Configurar `@tanstack/router-vite-plugin` (file-based routing → `routeTree.gen.ts`)
+- [x] Rutas iniciales: `__root.tsx`, `_auth.tsx`, `index.tsx`, `login.tsx`
+- [x] `scripts/build-server.mjs` (esbuild bundle del servidor → `dist-server/`)
+
+---
+
+## CI Local (Completado)
+
+- [x] Lefthook: hook `pre-commit` con lint + format-check
+- [x] Commitlint: Conventional Commits configurado
 
 ---
 
 ## Backlog Item A — Gestión de Sesiones Token-per-Session
 
 > **Prioridad: Crítica** — Requisito para que el JWT nunca sea expuesto al navegador.
+> **Bloqueado por:** endpoint `POST /api/auth/login` del backend Go (aún pendiente).
 
-- [ ] **A.1** Instalar: `express-session`, `connect-redis`, `ioredis`
-- [ ] **A.2** Configurar Redis como store de sesiones en Express (`connect-redis` + `express-session`)
+- [x] **A.1** Instalar: `express-session`, `connect-redis`, `ioredis`
+- [x] **A.2** Configurar Redis como store de sesiones en Express (`connect-redis` + `express-session`)
 - [ ] **A.3** Implementar `POST /auth/login`:
   - Recibir credenciales del frontend
   - Hacer proxy al backend Go (`POST /api/auth/login`)
@@ -34,7 +56,7 @@ Documento de trabajo derivado de `BFF-arquitectura-front.md`. Cubre todas las ta
   - Destruir la sesión en Redis (`req.session.destroy()`)
   - Limpiar la cookie en el navegador
 - [ ] **A.5** Implementar middleware de autenticación BFF:
-  - Leer `SessionID` de la cookie
+  - Leer `SessionID` de la cookie `sid`
   - Resolver el JWT en Redis
   - Adjuntar `Authorization: Bearer <token>` + `X-Service-Token` a la petición hacia el backend Go
   - Devolver `401` si la sesión no existe o expiró
@@ -48,16 +70,16 @@ Documento de trabajo derivado de `BFF-arquitectura-front.md`. Cubre todas las ta
 
 > **Prioridad: Alta**
 
-- [ ] **B.1** Instalar: `helmet`
-- [ ] **B.2** Configurar `helmet()` con Content Security Policy (CSP) estricta:
+- [x] **B.1** Instalar: `helmet`
+- [x] **B.2** Configurar `helmet()` con Content Security Policy (CSP) estricta:
   - `default-src 'self'`
   - `script-src 'self'` (bloquear scripts externos e inline)
   - `style-src 'self' 'unsafe-inline'` (solo si necesario para la UI)
   - `img-src 'self' data:`
   - `connect-src 'self'` (solo al mismo origen BFF)
   - `frame-ancestors 'none'` (anti-clickjacking)
-- [ ] **B.3** Configurar `Referrer-Policy: no-referrer`
-- [ ] **B.4** Configurar HSTS: `Strict-Transport-Security: max-age=31536000; includeSubDomains`
+- [x] **B.3** Configurar `Referrer-Policy: no-referrer`
+- [x] **B.4** Configurar HSTS: `Strict-Transport-Security: max-age=31536000; includeSubDomains`
 - [ ] **B.5** Verificar headers con [securityheaders.com](https://securityheaders.com) contra el entorno de staging
 
 **Criterio de aceptación:** El scanner de headers reporta calificación A o superior.
@@ -68,13 +90,13 @@ Documento de trabajo derivado de `BFF-arquitectura-front.md`. Cubre todas las ta
 
 > **Prioridad: Alta**
 
-- [ ] **C.1** Instalar: `@dr.pogodin/csurf`
-- [ ] **C.2** Configurar el middleware CSRF con el patrón Double Submit Cookie
-- [ ] **C.3** Implementar `GET /csrf-token`: devolver el token CSRF para que el frontend lo cachee en memoria al montar la app
-- [ ] **C.4** Aplicar el middleware CSRF a todas las rutas mutables: `POST`, `PUT`, `PATCH`, `DELETE`
-- [ ] **C.5** El BFF debe devolver `403` (o `419`) a cualquier petición mutable sin `X-CSRF-Token` válido, aunque la cookie de sesión esté presente
-- [ ] **C.6** Actualizar `app/api/client.ts` en el frontend para:
-  - Obtener el token CSRF de `GET /csrf-token` al iniciar la app
+- [x] **C.1** Instalar: `@dr.pogodin/csurf`
+- [x] **C.2** Configurar el middleware CSRF con el patrón Double Submit Cookie
+- [x] **C.3** Implementar `GET /api/csrf-token`: devolver el token CSRF para que el frontend lo cachee en memoria al montar la app
+- [x] **C.4** Aplicar el middleware CSRF a todas las rutas mutables: `POST`, `PUT`, `PATCH`, `DELETE`
+- [x] **C.5** El BFF debe devolver `403` a cualquier petición mutable sin `X-CSRF-Token` válido, aunque la cookie de sesión esté presente
+- [ ] **C.6** Actualizar `app/services/client.ts` en el frontend para:
+  - Obtener el token CSRF de `GET /api/csrf-token` al iniciar la app
   - Adjuntar `X-CSRF-Token: <token>` en cada `POST`, `PUT`, `PATCH`, `DELETE`
   - Manejar `419` (token expirado): refrescar el token y reintentar la petición una sola vez
 
@@ -92,7 +114,7 @@ Documento de trabajo derivado de `BFF-arquitectura-front.md`. Cubre todas las ta
 - [ ] **D.2** Implementar validación de tamaño máximo de archivo (configurable por variable de entorno, ej. `MAX_FILE_SIZE_MB=20`)
 - [ ] **D.3** Implementar middleware de auditoría para todas las peticiones al BFF:
   - Campos: `userId`, `action` (método + ruta), `timestamp` (ISO 8601), `ip` (con soporte `X-Forwarded-For` detrás de proxy)
-  - Destino inicial: log estructurado JSON a stdout (compatible con agregadores tipo Loki / CloudWatch)
+  - Destino inicial: log estructurado JSON a stdout — Pino ya redacta `Authorization` y `Cookie`; compatible con Loki / CloudWatch
 - [ ] **D.4** Implementar sanitización de metadatos en campos de entrada antes de proxear al backend:
   - Escapar caracteres HTML en campos de texto libre
   - Rechazar patrones de script injection en campos de metadatos de documentos
@@ -115,24 +137,13 @@ Documento de trabajo derivado de `BFF-arquitectura-front.md`. Cubre todas las ta
 
 ## Tareas de Ajuste — Frontend
 
-- [ ] **FE.1** Actualizar `useAuthStore`: eliminar cualquier campo relacionado con JWT; guardar solo `{ userId, nombre, rol, dependencia, tenantId }`
-- [ ] **FE.2** Actualizar `app/api/client.ts`:
-  - URL base: `VITE_BFF_URL` (eliminar `VITE_API_URL`)
-  - Agregar `credentials: 'include'` (Axios: `withCredentials: true`)
+- [x] **FE.1** Actualizar `useAuthStore`: sin campos JWT; guarda solo `{ userId, nombre, rol, dependencia, tenantId }`
+- [ ] **FE.2** Actualizar `app/services/client.ts`:
+  - Agregar `withCredentials: true` (Axios)
   - Integrar lógica de CSRF (tarea C.6)
 - [ ] **FE.3** Auditar y eliminar cualquier uso de `localStorage` o `sessionStorage` para datos de autenticación
 - [ ] **FE.4** Actualizar el flujo de login: tras `POST /auth/login` exitoso, guardar el perfil de usuario en `useAuthStore` (no el JWT)
-- [ ] **FE.5** Actualizar `.env.example`: reemplazar `VITE_API_URL` por `VITE_BFF_URL=http://localhost:3000`
-
----
-
-## Hoja de Ruta de Evolución (Para Futuras Fases)
-
-| Fase | Descripción | Prerrequisito |
-|------|-------------|---------------|
-| **Fase 1 (Actual)** | BFF como proxy de seguridad + entrega de SPA | Backlog A, B, C completos |
-| **Fase 2 (Medio Plazo)** | SSR con el servidor Express del BFF — mejora SEO y tiempo de carga inicial | Fase 1 completada |
-| **Fase 3 (Largo Plazo)** | React Islands (hidratación parcial) — carga JS solo en módulos críticos de gestión documental | Fase 2 completada |
+- [ ] **FE.5** Actualizar `.env.example`: confirmar que `VITE_API_URL` apunta al BFF y no al backend Go directamente
 
 ---
 
@@ -144,3 +155,22 @@ Documento de trabajo derivado de `BFF-arquitectura-front.md`. Cubre todas las ta
 - [ ] Los archivos con MIME-type no permitido son rechazados antes de llegar al backend Go
 - [ ] Existe un log de auditoría estructurado para cada petición al BFF
 - [ ] El backend Go no responde a peticiones sin el header `X-Service-Token` válido
+
+---
+
+## Hoja de Ruta de Evolución
+
+| Fase | Descripción | Estado |
+|---|---|---|
+| **Fase 1** | BFF como proxy de seguridad + SSR híbrido | ✅ Implementado |
+| **Fase 2** | React Islands (hidratación parcial) — carga JS solo en módulos críticos de gestión documental | 🔜 Largo plazo |
+
+---
+
+## Changelog
+
+| Versión | Fecha      | Cambio |
+|---------|------------|--------|
+| 1.2     | 2026-05-07 | A.1-A.2 marcadas completas; FE.1 marcada completa; nueva sección SSR+Router (completado); nueva sección CI Local; roadmap actualizado (SSR implementado) |
+| 1.1     | 2026-05-07 | Alineación con stack decidido (Vite + React + TypeScript + Zustand) |
+| 1.0     | 2026-04-XX | Versión inicial — backlog de implementación BFF completo |

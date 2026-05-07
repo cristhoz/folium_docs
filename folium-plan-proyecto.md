@@ -1,8 +1,8 @@
 # Plan de Proyecto — Folium
 ## Sistema de Gestión Documental para Entidades Públicas Colombianas
 
-**Versión:** 1.0  
-**Fecha:** Abril 2026  
+**Versión:** 1.3  
+**Fecha:** Mayo 2026  
 **Estado:** En planificación  
 **Confidencial**
 
@@ -31,20 +31,27 @@ Plataforma SaaS de gestión documental construida desde cero en Go, diseñada na
 | Componente | Tecnología | Justificación |
 |---|---|---|
 | Lenguaje | Go | Rendimiento, seguridad, binario único, ideal para APIs |
-| Framework web | Gin o Echo | Maduros, rápidos, buen ecosistema |
+| Framework web | Chi | Minimalista, idiomático en Go, sin magia, excelente para APIs REST |
 | Base de datos | PostgreSQL | Multi-tenant por schemas, robusto, open source |
 | Almacenamiento | Garage | S3-compatible, auto-hospedable, distribuido — MinIO archivado el 25/04/2026 |
-| Cola de trabajos | Asynq (Redis) | Emails, notificaciones, procesamiento async |
+| Cache / Sesiones / Colas | Valkey | Drop-in compatible con Redis; licencia BSD-3 real — Redis 7.4+ cambió a RSALv2 (no OSI); respaldado por Linux Foundation, AWS, Google |
 | Autenticación | JWT + Refresh tokens | Stateless, compatible con SaaS multi-tenant |
 | PDF | gofpdf / go-wkhtmltopdf | Generación de stickers y reportes |
 
 ### Frontend
 | Componente | Tecnología |
 |---|---|
-| Framework | Next.js / SvelteKit / Vue (a definir) |
-| Estilos | Tailwind CSS |
-| Componentes | Librería UI a definir (shadcn, PrimeVue, etc.) |
-| Estado | React Query / Pinia / TanStack |
+| Bundler / Dev server | Vite 6 |
+| Lenguaje | TypeScript 5.8 |
+| Framework UI | React 19 |
+| Router | TanStack Router v1 (file-based routing) |
+| Estado global | Zustand 5 |
+| BFF Server | Express 5 |
+| Sesiones | express-session + connect-redis + ioredis 5 |
+| Cache local (dev) | Redis 7 Alpine — Valkey en producción |
+| CSS | SCSS + Stylelint (recess-order) |
+| Testing | Jest 30 + ts-jest + Supertest |
+| CI local | Lefthook + Commitlint (Conventional Commits) |
 
 ### Infraestructura
 | Componente | Tecnología |
@@ -65,15 +72,21 @@ Plataforma SaaS de gestión documental construida desde cero en Go, diseñada na
 │                    CLIENTES                          │
 │         Navegador web / App móvil (futuro)           │
 └─────────────────────┬────────────────────────────────┘
-                      │ HTTPS
+                      │ HTTPS (cookie sid — sin JWT)
+┌─────────────────────▼────────────────────────────────┐
+│             BFF — Express 5 + SSR                    │
+│   Autenticación · Sesiones Redis · CSRF · Helmet     │
+│   SSR (renderToString + TanStack Router)             │
+│   tenant-a.app.foliumhq.co / tenant-b.app.foliumhq.co│
+└─────────────────────┬────────────────────────────────┘
+                      │ HTTP interno + Authorization Bearer + X-Service-Token
 ┌─────────────────────▼────────────────────────────────┐
 │                  API GATEWAY                         │
 │              Nginx / Reverse Proxy                   │
-│    tenant-a.app.foliumhq.co / tenant-b.app.foliumhq.co    │
 └─────────────────────┬────────────────────────────────┘
                       │
 ┌─────────────────────▼────────────────────────────────┐
-│               BACKEND EN GO                          │
+│               BACKEND EN GO (Chi)                    │
 │  ┌────────────┐  ┌────────────┐  ┌────────────────┐  │
 │  │  API REST  │  │  Workers   │  │  Scheduler     │  │
 │  │  (núcleo)  │  │  (async)   │  │  (alertas)     │  │
@@ -81,9 +94,9 @@ Plataforma SaaS de gestión documental construida desde cero en Go, diseñada na
 └──────┬───────────────────┬───────────────────────────┘
        │                   │
 ┌──────▼──────┐     ┌──────▼──────┐     ┌────────────┐
-│ PostgreSQL  │     │   Garage    │     │   Redis    │
-│ (por schema │     │ (archivos   │     │  (colas y  │
-│  por tenant)│     │  por bucket)│     │   caché)   │
+│ PostgreSQL  │     │   Garage    │     │   Valkey   │
+│ (por schema │     │ (archivos   │     │ (colas,    │
+│  por tenant)│     │  por bucket)│     │caché,sesión)│
 └─────────────┘     └─────────────┘     └────────────┘
 
 ┌──────────────────────────────────────────────────────┐
@@ -296,7 +309,7 @@ Radicado
 **Objetivo:** Demostrar el concepto al cliente y cerrar el primer contrato
 
 #### Entregables
-- [ ] Estructura base del proyecto en Go
+- [x] Estructura base del proyecto en Go
 - [ ] Autenticación JWT con roles básicos
 - [ ] Multi-tenant básico (2 tenants de demo)
 - [ ] CRUD de dependencias y usuarios
@@ -447,13 +460,15 @@ El cliente puede radicar un documento, verlo en la bandeja, imprimirlo y buscarl
 
 ## 11. Decisiones Técnicas Pendientes
 
-- [ ] Framework frontend: Next.js vs SvelteKit vs Vue
-- [ ] Framework backend Go: Gin vs Echo vs Chi
+- [x] Framework frontend: **Vite + React + TypeScript + Zustand** ✅
+- [x] Framework backend Go: **Chi** ✅
 - [ ] Estrategia de migraciones DB: golang-migrate vs atlas
 - [ ] Generación de PDFs: gofpdf vs chromedp (headless Chrome)
 - [ ] Proveedor de nube principal para el SaaS
 - [ ] Estrategia de backups automatizados
 - [ ] Política de retención de logs
+- [ ] OCR: librería o servicio para extraer texto de PDFs escaneados (Tesseract, AWS Textract, Google Document AI)
+- [ ] Modelo de IA para extracción de metadatos de cartas: destinatario, remitente, asunto (LLM local vs API externa)
 
 ---
 
@@ -479,13 +494,24 @@ seguridad/      →  usuarios, roles, permisos
 
 ## 13. Próximos Pasos Inmediatos
 
-1. **Definir framework frontend** — según preferencia del desarrollador
-2. **Crear repositorio del proyecto** — estructura base de carpetas Go
-3. **Diseñar esquema de base de datos** — tablas iniciales para la POC
-4. **Levantar entorno de desarrollo** — Docker Compose con Go + PostgreSQL + Garage
-5. **Iniciar Semana 1 de la POC** — autenticación y dependencias
+1. **Implementar autenticación JWT en backend Go** — endpoint `POST /api/auth/login` con respuesta de perfil + JWT (contrato con BFF)
+2. **Completar flujo de sesión en BFF** — tareas A.3–A.6 (login, logout, middleware auth, /auth/me)
+3. **Integrar CSRF en el cliente frontend** — tarea C.6 (`app/services/client.ts`)
+4. **Multi-tenant básico en backend Go** — 2 tenants de demo, CRUD de dependencias y usuarios
+5. **Radicación de entrada funcional** — número de radicado colombiano, subida a Garage, bandeja por dependencia
 
 ---
 
 *Documento vivo — se actualiza en cada iteración del proyecto.*  
-*Versión 1.0 — Abril 2026*
+*Versión 1.3 — Mayo 2026*
+
+---
+
+## Changelog
+
+| Versión | Fecha      | Cambio |
+|---------|------------|--------|
+| 1.3     | 2026-05-07 | Stack frontend actualizado con versiones exactas; diagrama de arquitectura añade capa BFF; próximos pasos actualizados al estado real del proyecto |
+| 1.2     | 2026-05-07 | Framework frontend decidido: Vite+React+TS+Zustand; Backend Go: Chi; añadidas decisiones pendientes de OCR y modelo IA |
+| 1.1     | 2026-04-XX | Garage reemplaza MinIO (repositorio archivado); Valkey reemplaza Redis (licencia BSD-3) |
+| 1.0     | 2026-04-XX | Versión inicial del plan de proyecto |
