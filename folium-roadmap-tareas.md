@@ -1,6 +1,6 @@
 # Folium — Roadmap de Tareas
 
-**Versión:** 1.6 | **Fecha:** 2026-08-01 | **Proyecto:** Folium — foliumhq.co | **Uso interno**
+**Versión:** 1.7 | **Fecha:** 2026-08-01 | **Proyecto:** Folium — foliumhq.co | **Uso interno**
 
 > Documento vivo. Fuente de verdad del estado de ejecución del proyecto.  
 > Los detalles técnicos de cada tarea viven en sus documentos fuente (ver referencias al pie).
@@ -11,7 +11,7 @@
 
 | Área | Progreso | Próxima acción |
 |------|----------|----------------|
-| **v1 Single-tenant (repo nuevo)** | 🟢 Prompt #2 de QA ejecutado y validado, 0 Críticos/Altos abiertos | Resolver pendientes de QA (DOCX/XLSX, riesgos no cubiertos) → desplegar en VPS |
+| **v1 Single-tenant (repo nuevo)** | 🟢 QA validado; prompt #3 (fix DOCX/XLSX) generado | Ejecutar prompt #3 en el repo `folium` → desplegar en VPS |
 | Backend Go — Auth | ⏸️ Pausado (track SaaS) | — |
 | Backend Go — Seguridad | ⏸️ Pausado (track SaaS) | BE.3 documentar contrato BFF→Backend |
 | Backend Go — POC | ⏸️ Pausado (track SaaS) | Multi-tenant, CRUD, radicación |
@@ -35,6 +35,7 @@ El desarrollo de la v1 se itera vía LLM en un **repositorio nuevo** (`folium`),
 |--------|---------|-----------|
 | #1 Construcción | `folium-prompt-fase1-v1.md` | Construye el sistema completo desde cero |
 | #2 Verificación/QA | `folium-prompt-fase1-qa.md` | Audita contra la spec, informa hallazgos y corrige Críticos/Altos |
+| #3 Fix adjuntos | `folium-prompt-fase1-fix-adjuntos.md` | Cierra el gap de validación DOCX/XLSX (QA-008) con validación OOXML real y endurecimiento del serving |
 
 ### Decisiones cerradas para la v1
 
@@ -59,7 +60,9 @@ El desarrollo de la v1 se itera vía LLM en un **repositorio nuevo** (`folium`),
 - [x] Ejecutar prompt #1 en repo nuevo `folium` (sesión LLM aparte) — ver `DECISIONES.md` del repo `folium` y riesgos abiertos abajo
 - [x] Ejecutar prompt #2 de QA sobre el resultado — ver `QA-INFORME.md` en el repo `folium` (commits `2385417`…`0e26575`, informe en `163f6a1`); verificado independientemente contra el repo real (build/vet/lint/tests en verde, los 5 commits de corrección hacen lo que dicen)
 - [x] Revisar `QA-INFORME.md` y decidir si amerita prompt #3 de pulido — **sí amerita**: 0 Críticos/Altos quedaron abiertos, pero el QA no cubrió el riesgo de seguridad de DOCX/XLSX ya señalado abajo (violación de spec no detectada) ni los demás riesgos de integridad de datos; ver "Pendientes tras el QA" abajo
-- [ ] Resolver pendientes tras el QA (ver sección nueva abajo) — candidatos a un prompt #3 acotado
+- [x] Generar prompt #3 de fix de adjuntos (`folium-prompt-fase1-fix-adjuntos.md`) — validación OOXML real de DOCX/XLSX (QA-008)
+- [ ] Ejecutar prompt #3 en el repo `folium` (sesión LLM aparte)
+- [ ] Resolver el resto de pendientes tras el QA (ver sección abajo: QA-006, QA-007, integridad de datos, `PII_HMAC_KEY`)
 - [ ] Desplegar en VPS para la entrega
 
 ### ⚠️ Riesgos abiertos de la ejecución del prompt #1 (estado tras el QA del prompt #2)
@@ -85,7 +88,7 @@ Decisiones que el LLM tomó durante la construcción y que no estaban explícita
 
 El `QA-INFORME.md` fue verificado de forma independiente contra el repo real `folium_single_tenant` (commits `9e1b747`…`61d0d52`): build, `go vet`, `golangci-lint`, tests, `tsc`/ESLint/build de `web/` en verde; los 5 commits de corrección (`QA-001`…`QA-005`) efectivamente implementan lo que documentan, con sus tests de regresión presentes y en verde. El informe es confiable en lo que afirma. Sin embargo, quedan pendientes que el QA no cubrió:
 
-1. **Prioridad alta — DOCX/XLSX magic bytes** (ver arriba): es una violación de spec explícita, no un hallazgo Bajo. Candidato directo a un prompt #3 acotado: exigir inspección real de `[Content_Types].xml` dentro del ZIP antes de aceptar `.docx`/`.xlsx`, con test que sube un ZIP arbitrario renombrado y espera 415.
+1. **Prioridad alta — DOCX/XLSX magic bytes** (ver arriba): es una violación de spec explícita, no un hallazgo Bajo. **Prompt #3 ya generado** (`folium-prompt-fase1-fix-adjuntos.md`, 2026-08-01): validación estructural OOXML vía `[Content_Types].xml` + parte principal real, rechazo explícito de macros (docm/xlsm), defensas anti-ZIP-bomb en el validador, cruce extensión↔contenido, `nosniff` y `Content-Disposition` escapado al servir, tests unitarios y de handler. Pendiente de ejecutar en el repo `folium` como `QA-008`.
 2. **QA-006 (Bajo, no corregido):** `pdftotext` no extrae el número completo del sticker PDF (tabla `ToUnicode` incompleta en la fuente subconjunto de gofpdf). Sin pérdida de datos funcionales; pendiente de investigación en la generación de fuentes si se prioriza accesibilidad del PDF.
 3. **QA-007 (Bajo, no corregido):** mezcla de artefactos npm/pnpm en `web/` — decidir un único gestor de paquetes.
 4. **Riesgos de integridad de datos pre-QA sin tocar:** atomicidad de "Responder", redundancia `parent_record_id`/`origin_record_id`, ambigüedad del estado `filed` reutilizado, semáforo de frontend sin festivos colombianos — ninguno estaba en el alcance de prueba del prompt #2 (que se ciñó a la spec original), pero siguen siendo riesgo real antes de producción.
@@ -291,6 +294,7 @@ El `QA-INFORME.md` fue verificado de forma independiente contra el repo real `fo
 | `comparativa-orfeo-alfresco.md` | Análisis competitivo para propuesta comercial |
 | `folium-prompt-fase1-v1.md` | Prompt #1 — construcción de la v1 single-tenant desde cero |
 | `folium-prompt-fase1-qa.md` | Prompt #2 — verificación, QA y corrección de la v1 |
+| `folium-prompt-fase1-fix-adjuntos.md` | Prompt #3 — fix de seguridad: validación OOXML de DOCX/XLSX (QA-008) |
 
 ---
 
@@ -298,6 +302,7 @@ El `QA-INFORME.md` fue verificado de forma independiente contra el repo real `fo
 
 | Versión | Fecha      | Cambio |
 |---------|------------|--------|
+| 1.7     | 2026-08-01 | Prompt #3 generado (`folium-prompt-fase1-fix-adjuntos.md`): validación estructural OOXML de DOCX/XLSX (QA-008), anti-macros, defensas ZIP-bomb, endurecimiento del serving; agregado a tabla de prompts, Tareas v1, pendientes y referencias |
 | 1.6     | 2026-08-01 | Prompt #2 de QA validado contra el repo real `folium_single_tenant` (commits `9e1b747`…`61d0d52`): build/vet/lint/tests en verde, los 5 commits de corrección hacen lo que documentan. Riesgos abiertos actualizados (DOCX/XLSX marcado como violación de spec no cubierta por el QA); nueva sección "Pendientes tras el QA" con candidatos a prompt #3 |
 | 1.5     | 2026-08-01 | Prompt #1 ejecutado en el repo `folium`; marcado en Estado Rápido y Tareas v1; nueva sección "Riesgos abiertos de la ejecución del prompt #1" con hallazgos de seguridad, consistencia de datos y build a resolver antes del QA |
 | 1.4     | 2026-08-01 | Pivote v1 single-tenant: nueva sección con decisiones cerradas y tareas; track SaaS/BFF marcado en pausa; decisiones 1 y 2 cerradas (golang-migrate, gofpdf); prompts #1 y #2 en referencias |
