@@ -695,4 +695,13 @@ tenants (public)
 
 ---
 
-*Documento técnico — Proyecto Folium. Versión 1.0 — Mayo 2026.*
+*Documento técnico — Proyecto Folium. Versión 1.1 — Mayo 2026.*
+
+---
+
+## Changelog
+
+| Versión | Fecha      | Cambio                                                                    |
+|---------|------------|---------------------------------------------------------------------------|
+| 1.1     | 2026-05-XX | Adición de tabla `sessions` con `jti` y tabla `document_access_logs`      |
+| 1.0     | 2026-04-XX | Versión inicial — schema de base de datos multi-tenant                    |

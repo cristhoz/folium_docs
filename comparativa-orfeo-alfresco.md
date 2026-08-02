@@ -2,7 +2,7 @@
 ## Orfeo vs Alfresco — Guía de Evaluación para Propuesta Comercial
 
 **Fecha:** Abril 2026  
-**Elaborado por:** Cristián Hozman  
+**Elaborado por:** Cristián de la Hoz  
 **Propósito:** Apoyo técnico para cotización y selección de plataforma DMS
 
 ---
@@ -268,3 +268,11 @@ No existe una respuesta universal. La selección debe basarse en los criterios d
 ---
 
 *Documento elaborado como apoyo técnico para proceso de cotización. Versión 1.0 — Abril 2026.*
+
+---
+
+## Changelog
+
+| Versión | Fecha      | Cambio                                                        |
+|---------|------------|---------------------------------------------------------------|
+| 1.0     | 2026-04-XX | Versión inicial — comparativa Orfeo vs Alfresco               |

@@ -1,6 +1,6 @@
 # Tareas de Implementación — Capa BFF Segura
 
-**Versión:** 1.3 | **Fecha:** Mayo 2026 | **Proyecto:** Folium — foliumhq.co | **Uso interno**
+**Versión:** 1.4 | **Fecha:** Mayo 2026 | **Proyecto:** Folium — foliumhq.co | **Uso interno**
 
 Documento de trabajo derivado de `BFF-arquitectura-front.md`. Cubre todas las tareas necesarias para implementar la capa BFF en Folium bajo estándares MinTIC/OWASP.
 
@@ -145,8 +145,8 @@ Documento de trabajo derivado de `BFF-arquitectura-front.md`. Cubre todas las ta
 
 ## Tareas de Ajuste — Backend Go
 
-- [ ] **BE.1** Restringir CORS del backend Go exclusivamente al origen del BFF (variable de entorno `BFF_ORIGIN`); eliminar acceso desde el navegador
-- [ ] **BE.2** Implementar middleware de validación del header `X-Service-Token` en todas las rutas protegidas:
+- [x] **BE.1** Restringir CORS del backend Go exclusivamente al origen del BFF (variable de entorno `BFF_ORIGIN`); eliminar acceso desde el navegador
+- [x] **BE.2** Implementar middleware de validación del header `X-Service-Token` en todas las rutas protegidas:
   - Rechazar con `403` si el header está ausente o no coincide con el secreto configurado
 - [ ] **BE.3** Documentar el contrato interno BFF → Backend en `folium_backend/docs/bff-contract.md`:
   - Headers esperados
@@ -191,6 +191,7 @@ Documento de trabajo derivado de `BFF-arquitectura-front.md`. Cubre todas las ta
 
 | Versión | Fecha      | Cambio |
 |---------|------------|--------|
+| 1.4     | 2026-05-07 | BE.1 y BE.2 marcadas ✅ completas |
 | 1.3     | 2026-05-07 | A.3–A.6 desbloqueados — backend Go auth completo; tabla de contrato del backend; A.3 actualizado con rutas y body reales; nueva tarea A.3b para renovación transparente de tokens |
 | 1.2     | 2026-05-07 | A.1-A.2 marcadas completas; FE.1 marcada completa; nueva sección SSR+Router (completado); nueva sección CI Local; roadmap actualizado (SSR implementado) |
 | 1.1     | 2026-05-07 | Alineación con stack decidido (Vite + React + TypeScript + Zustand) |

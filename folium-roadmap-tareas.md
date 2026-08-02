@@ -1,6 +1,6 @@
 # Folium — Roadmap de Tareas
 
-**Versión:** 1.2 | **Fecha:** 2026-05-07 | **Proyecto:** Folium — foliumhq.co | **Uso interno**
+**Versión:** 1.3 | **Fecha:** 2026-05-07 | **Proyecto:** Folium — foliumhq.co | **Uso interno**
 
 > Documento vivo. Fuente de verdad del estado de ejecución del proyecto.  
 > Los detalles técnicos de cada tarea viven en sus documentos fuente (ver referencias al pie).
@@ -12,6 +12,7 @@
 | Área | Progreso | Próxima acción |
 |------|----------|----------------|
 | Backend Go — Auth | ✅ Completo | — |
+| Backend Go — Seguridad | 🟡 En curso | BE.3 documentar contrato BFF→Backend |
 | Backend Go — POC | 🟡 En curso | Multi-tenant, CRUD, radicación |
 | BFF — Config base | ✅ Completo | — |
 | BFF — SSR híbrido | ✅ Completo | — |
@@ -82,8 +83,8 @@
 - [ ] **D.4** Sanitización de metadatos: escapar HTML, rechazar script injection en campos de documentos
 
 ### Backend Go — Ajustes de Seguridad
-- [ ] **BE.1** Restringir CORS del backend Go solo al origen BFF (var `BFF_ORIGIN`)
-- [ ] **BE.2** Middleware de validación de header `X-Service-Token` en todas las rutas protegidas
+- [x] **BE.1** Restringir CORS del backend Go solo al origen BFF (var `BFF_ORIGIN`)
+- [x] **BE.2** Middleware de validación de header `X-Service-Token` en todas las rutas protegidas
 - [ ] **BE.3** Documentar contrato BFF → Backend en `folium_backend/docs/bff-contract.md`
 
 ### Backend Go — POC (continuación)
@@ -199,6 +200,8 @@
 | CI local: Lefthook (pre-commit lint + format-check) + Commitlint (Conventional Commits) | 2026-05-07 |
 | CSS: SCSS + Stylelint (recess-order) | 2026-05-07 |
 | Logging BFF: Pino 10 + pino-http (redacción automática de Authorization + Cookie) | 2026-05-07 |
+| Backend Go — BE.1: CORS restringido al origen BFF (`BFF_ORIGIN`), fail-fast si no está definido | 2026-05-07 |
+| Backend Go — BE.2: Middleware `RequireServiceToken` con `subtle.ConstantTimeCompare` en rutas protegidas | 2026-05-07 |
 
 ---
 
@@ -219,6 +222,7 @@
 
 | Versión | Fecha      | Cambio |
 |---------|------------|--------|
+| 1.3     | 2026-05-07 | BE.1 y BE.2 marcadas ✅ completas; nueva fila Backend Go — Seguridad en Estado Rápido; 2 nuevas entradas en ✅ Completado |
 | 1.2     | 2026-05-07 | Backend Go — Auth marcado ✅ completo; BFF Sesiones desbloqueado; sección Auth completada en Sprint Actual; 5 nuevas entradas en ✅ Completado |
 | 1.1     | 2026-05-07 | A.1-A.2 y FE.1 marcadas completas; nueva sección SSR en estado rápido; 9 nuevas entradas en ✅ Completado; React Islands movido a Fase 3 |
 | 1.0     | 2026-05-07 | Creación del roadmap consolidado; estados iniciales según progreso real |

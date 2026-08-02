@@ -503,3 +503,11 @@ func (s *DocumentAccessService) GetPresignedURL(ctx context.Context, req Presign
 ---
 
 *Documento de base de conocimiento — Proyecto Folium. Versión 1.0 — Abril 2026.*
+
+---
+
+## Changelog
+
+| Versión | Fecha      | Cambio                                                          |
+|---------|------------|-----------------------------------------------------------------|
+| 1.0     | 2026-04-XX | Versión inicial — flujos de trabajo, privacidad y trazabilidad  |
