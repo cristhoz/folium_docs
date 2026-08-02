@@ -1,6 +1,6 @@
 # Folium — Roadmap de Tareas
 
-**Versión:** 1.3 | **Fecha:** 2026-05-07 | **Proyecto:** Folium — foliumhq.co | **Uso interno**
+**Versión:** 1.6 | **Fecha:** 2026-08-01 | **Proyecto:** Folium — foliumhq.co | **Uso interno**
 
 > Documento vivo. Fuente de verdad del estado de ejecución del proyecto.  
 > Los detalles técnicos de cada tarea viven en sus documentos fuente (ver referencias al pie).
@@ -11,20 +11,89 @@
 
 | Área | Progreso | Próxima acción |
 |------|----------|----------------|
-| Backend Go — Auth | ✅ Completo | — |
-| Backend Go — Seguridad | 🟡 En curso | BE.3 documentar contrato BFF→Backend |
-| Backend Go — POC | 🟡 En curso | Multi-tenant, CRUD, radicación |
-| BFF — Config base | ✅ Completo | — |
-| BFF — SSR híbrido | ✅ Completo | — |
-| BFF — Sesiones (A) | 🟡 En curso | A.3–A.6 listos para implementar |
-| BFF — Headers (B) | 🟡 Casi listo | B.5 verificar securityheaders.com |
-| BFF — CSRF (C) | 🟡 Casi listo | C.6 integrar CSRF en client.ts |
-| BFF — Docs (D) | 🔴 Pendiente | D.1 validación MIME-type |
-| Frontend | 🟡 En curso | C.6 integrar CSRF en client.ts |
+| **v1 Single-tenant (repo nuevo)** | 🟢 Prompt #2 de QA ejecutado y validado, 0 Críticos/Altos abiertos | Resolver pendientes de QA (DOCX/XLSX, riesgos no cubiertos) → desplegar en VPS |
+| Backend Go — Auth | ⏸️ Pausado (track SaaS) | — |
+| Backend Go — Seguridad | ⏸️ Pausado (track SaaS) | BE.3 documentar contrato BFF→Backend |
+| Backend Go — POC | ⏸️ Pausado (track SaaS) | Multi-tenant, CRUD, radicación |
+| BFF — Config base | ⏸️ Pausado (track SaaS) | — |
+| BFF — SSR híbrido | ⏸️ Pausado (track SaaS) | — |
+| BFF — Sesiones (A) | ⏸️ Pausado (track SaaS) | A.3–A.6 listos para implementar |
+| BFF — Headers (B) | ⏸️ Pausado (track SaaS) | B.5 verificar securityheaders.com |
+| BFF — CSRF (C) | ⏸️ Pausado (track SaaS) | C.6 integrar CSRF en client.ts |
+| BFF — Docs (D) | ⏸️ Pausado (track SaaS) | D.1 validación MIME-type |
+| Frontend | ⏸️ Pausado (track SaaS) | C.6 integrar CSRF en client.ts |
 
 ---
 
-## 🚧 Sprint Actual — BFF + POC Backend
+## 🎯 Pivote — v1 Single-tenant (decidido 2026-08-01)
+
+La primera versión ejecutable de Folium **no es SaaS**: se construye single-tenant para una sola entidad, con el alcance funcional de la Fase 1 completa, para cumplir una entrega y generar valor. La idea de negocio y la arquitectura SaaS (multi-tenant, BFF, Garage, Valkey) siguen vigentes como objetivo posterior; el trabajo existente del track SaaS queda **en pausa**, no descartado.
+
+El desarrollo de la v1 se itera vía LLM en un **repositorio nuevo** (`folium`), a partir de dos prompts de un solo tiro:
+
+| Prompt | Archivo | Propósito |
+|--------|---------|-----------|
+| #1 Construcción | `folium-prompt-fase1-v1.md` | Construye el sistema completo desde cero |
+| #2 Verificación/QA | `folium-prompt-fase1-qa.md` | Audita contra la spec, informa hallazgos y corrige Críticos/Altos |
+
+### Decisiones cerradas para la v1
+
+| Decisión | v1 Single-tenant | Diseño SaaS (v2+) |
+|----------|------------------|-------------------|
+| Tenancy | Un solo schema `public`, sin `tenant_id` ni RLS; tabla `entity_settings` | Schema por tenant + RLS |
+| Frontend | SPA embebida en el binario Go (`embed.FS`), mismo origen | BFF Express + SSR |
+| Autenticación | Sesiones server-side: cookie HttpOnly + tabla `sessions` (sin JWT) | JWT + refresh + blocklist JTI |
+| Adjuntos | Disco local vía interfaz `Storage` | Garage, bucket por tenant |
+| Caché/colas | Ninguna — scheduler in-process (goroutine) | Valkey |
+| Workflow | Estados fijos en código (`filed → assigned → in_progress → replied → archived`) | Máquina de estados configurable |
+| PII (Ley 1581) | HMAC-SHA256 + AES-256-GCM desde el día uno | Igual |
+| Roles | 4 fijos: `admin`, `ventanilla`, `jefe_dependencia`, `funcionario` | Configurables (JSONB) |
+| Migraciones | golang-migrate | — (decisión heredada) |
+| PDF / barcode | gofpdf + boombuler/barcode | — (decisión heredada) |
+
+### Tareas v1
+
+- [x] Iterar plan y cerrar decisiones técnicas de la v1
+- [x] Generar prompt #1 de construcción (`folium-prompt-fase1-v1.md`)
+- [x] Generar prompt #2 de verificación/QA (`folium-prompt-fase1-qa.md`)
+- [x] Ejecutar prompt #1 en repo nuevo `folium` (sesión LLM aparte) — ver `DECISIONES.md` del repo `folium` y riesgos abiertos abajo
+- [x] Ejecutar prompt #2 de QA sobre el resultado — ver `QA-INFORME.md` en el repo `folium` (commits `2385417`…`0e26575`, informe en `163f6a1`); verificado independientemente contra el repo real (build/vet/lint/tests en verde, los 5 commits de corrección hacen lo que dicen)
+- [x] Revisar `QA-INFORME.md` y decidir si amerita prompt #3 de pulido — **sí amerita**: 0 Críticos/Altos quedaron abiertos, pero el QA no cubrió el riesgo de seguridad de DOCX/XLSX ya señalado abajo (violación de spec no detectada) ni los demás riesgos de integridad de datos; ver "Pendientes tras el QA" abajo
+- [ ] Resolver pendientes tras el QA (ver sección nueva abajo) — candidatos a un prompt #3 acotado
+- [ ] Desplegar en VPS para la entrega
+
+### ⚠️ Riesgos abiertos de la ejecución del prompt #1 (estado tras el QA del prompt #2)
+
+Decisiones que el LLM tomó durante la construcción y que no estaban explícitas en el prompt. El QA (prompt #2) corrigió 2 de estos (marcados ✅) pero **no cubrió ni mencionó el resto** — siguen abiertos y deben resolverse antes de producción:
+
+**Seguridad**
+- ⚠️ **Aún abierto y NO cubierto por el QA** — Validación de DOCX/XLSX solo confirma que el archivo es un ZIP válido (`internal/storage/mime.go:27-29`, comentario propio: "docx/xlsx are both zip containers; caller disambiguates via extension") y confía en la extensión — no inspecciona `[Content_Types].xml`. Permite subir cualquier ZIP renombrado como `.docx`/`.xlsx`. Esto **viola directamente** el requisito explícito de la spec del prompt #2 ("validación MIME por magic bytes") y el caso de prueba 1.4 del QA solo probó un `.exe` renombrado a `.pdf` (que sí es rechazado), nunca un ZIP genérico renombrado a `.docx`/`.xlsx` (que pasaría). Verificado directamente en el código el 2026-08-01: el problema sigue presente en HEAD (`61d0d52`) y el `QA-INFORME.md` no lo menciona en ningún hallazgo.
+- ✅ Resuelto por el QA — Cookie `folium_sid` con `Secure` rompía el login en despliegues por IP de LAN sin TLS. Corregido como `QA-001` (commit `2385417`): ahora configurable vía `COOKIE_SECURE`, con `true` como default seguro.
+- `PII_HMAC_KEY` acepta mínimo 16 bytes; el prompt y `.env.example` sugieren 32 para ambas llaves. Con HMAC-SHA256 lo recomendado es llave ≥ 32 bytes para margen de seguridad completo — sigue sin homologar, el QA no lo tocó.
+
+**Integridad de datos / consistencia** *(ninguno cubierto por el QA — fuera del alcance de su spec de prueba)*
+- La acción "Responder" no es atómica: si falla la creación del radicado de salida tras marcar el de entrada como `replied`, queda huérfano sin mecanismo de detección. Falta un chequeo periódico de "`replied` sin salida vinculada".
+- Redundancia entre `records.parent_record_id` y `outgoing_record_details.origin_record_id` (ambos enlazan salida↔entrada) — aclarar cuál es la fuente de verdad antes de construir reportes sobre esto.
+- El estado `filed` se reutiliza tanto para "radicado nuevo" como para "devuelto/redirigido pendiente de reasignación" — distinguible solo vía `record_history.action`. Cualquier filtro de bandeja/reporte que use solo `status` puede mezclar ambos casos.
+- El semáforo de vencimiento en frontend solo cuenta fines de semana (no festivos colombianos), mientras el cálculo autoritativo del backend sí los considera — cerca de un festivo el color puede no coincidir con la urgencia real de un plazo legal.
+
+**Build/despliegue**
+- Lockfile doble (pnpm en dev, `npm ci` en Docker/Makefile) — persiste, ahora documentado formalmente como `QA-007` (Bajo, no corregido por decisión explícita del QA). Confirmar que `package-lock.json` está commiteado y sincronizado con `pnpm-lock.yaml`, o eliminar uno de los dos gestores.
+- Migraciones automáticas al arrancar el binario son correctas para una sola instancia; si más adelante se corre más de una réplica, pueden generar condiciones de carrera — revisar antes de escalar horizontalmente. El QA no probó múltiples réplicas (fuera de alcance de single-tenant v1).
+
+### 📋 Pendientes tras el QA (prompt #2) — validado 2026-08-01
+
+El `QA-INFORME.md` fue verificado de forma independiente contra el repo real `folium_single_tenant` (commits `9e1b747`…`61d0d52`): build, `go vet`, `golangci-lint`, tests, `tsc`/ESLint/build de `web/` en verde; los 5 commits de corrección (`QA-001`…`QA-005`) efectivamente implementan lo que documentan, con sus tests de regresión presentes y en verde. El informe es confiable en lo que afirma. Sin embargo, quedan pendientes que el QA no cubrió:
+
+1. **Prioridad alta — DOCX/XLSX magic bytes** (ver arriba): es una violación de spec explícita, no un hallazgo Bajo. Candidato directo a un prompt #3 acotado: exigir inspección real de `[Content_Types].xml` dentro del ZIP antes de aceptar `.docx`/`.xlsx`, con test que sube un ZIP arbitrario renombrado y espera 415.
+2. **QA-006 (Bajo, no corregido):** `pdftotext` no extrae el número completo del sticker PDF (tabla `ToUnicode` incompleta en la fuente subconjunto de gofpdf). Sin pérdida de datos funcionales; pendiente de investigación en la generación de fuentes si se prioriza accesibilidad del PDF.
+3. **QA-007 (Bajo, no corregido):** mezcla de artefactos npm/pnpm en `web/` — decidir un único gestor de paquetes.
+4. **Riesgos de integridad de datos pre-QA sin tocar:** atomicidad de "Responder", redundancia `parent_record_id`/`origin_record_id`, ambigüedad del estado `filed` reutilizado, semáforo de frontend sin festivos colombianos — ninguno estaba en el alcance de prueba del prompt #2 (que se ciñó a la spec original), pero siguen siendo riesgo real antes de producción.
+5. Homologar `PII_HMAC_KEY` a mínimo 32 bytes (actualmente acepta 16).
+
+---
+
+## ⏸️ Track SaaS — BFF + POC Backend *(en pausa desde 2026-08-01 — ver Pivote v1)*
 
 ### BFF — Backlog Item A: Gestión de Sesiones *(Crítica — bloquea todo)*
 - [x] **A.1** Instalar `express-session`, `connect-redis`, `ioredis`
@@ -109,6 +178,8 @@
 
 ## 🗓️ Fase 1 — MVP (Meses 1-6)
 
+> **2026-08-01:** Este alcance se entrega mediante la **v1 single-tenant** (ver sección Pivote), no sobre el track SaaS.
+
 *Desbloquear: primer cliente en producción pagando.*
 
 - [ ] Radicación de salida vinculada al radicado de entrada
@@ -162,8 +233,8 @@
 
 | # | Decisión | Opciones | Urgencia |
 |---|----------|----------|----------|
-| 1 | Migraciones DB | golang-migrate vs atlas | Antes de POC |
-| 2 | Generación de PDFs | gofpdf vs chromedp | Durante POC |
+| 1 | ~~Migraciones DB~~ | ✅ **golang-migrate** (cerrada en v1, 2026-08-01) | — |
+| 2 | ~~Generación de PDFs~~ | ✅ **gofpdf** + boombuler/barcode (cerrada en v1, 2026-08-01) | — |
 | 3 | OCR para PDFs escaneados | Tesseract / AWS Textract / Google Document AI | Fase 1 |
 | 4 | IA extracción de metadatos de cartas | LLM local vs API externa (Claude, OpenAI) | Fase 1 |
 | 5 | Proveedor de nube SaaS | AWS / DigitalOcean / Hetzner | Antes de Fase 1 |
@@ -202,6 +273,9 @@
 | Logging BFF: Pino 10 + pino-http (redacción automática de Authorization + Cookie) | 2026-05-07 |
 | Backend Go — BE.1: CORS restringido al origen BFF (`BFF_ORIGIN`), fail-fast si no está definido | 2026-05-07 |
 | Backend Go — BE.2: Middleware `RequireServiceToken` con `subtle.ConstantTimeCompare` en rutas protegidas | 2026-05-07 |
+| Pivote v1 single-tenant: decisiones cerradas (SPA embebida, disco local, PII cifrada, estados fijos, sesiones sin JWT) | 2026-08-01 |
+| Prompt #1 de construcción v1 (`folium-prompt-fase1-v1.md`) y prompt #2 de QA (`folium-prompt-fase1-qa.md`) | 2026-08-01 |
+| Prompt #2 de QA ejecutado sobre `folium`: 2 hallazgos Crítico/Alto y 3 Medio corregidos (`QA-001`…`QA-005`), 2 Bajo documentados sin corregir; verificado independientemente contra el repo real | 2026-08-01 |
 
 ---
 
@@ -215,6 +289,8 @@
 | `folium-schema-base-datos.md` | Schema de BD y decisiones de modelo de datos |
 | `folium-workflows-y-privacidad.md` | Flujos de trabajo, privacidad (Ley 1581), trazabilidad |
 | `comparativa-orfeo-alfresco.md` | Análisis competitivo para propuesta comercial |
+| `folium-prompt-fase1-v1.md` | Prompt #1 — construcción de la v1 single-tenant desde cero |
+| `folium-prompt-fase1-qa.md` | Prompt #2 — verificación, QA y corrección de la v1 |
 
 ---
 
@@ -222,6 +298,9 @@
 
 | Versión | Fecha      | Cambio |
 |---------|------------|--------|
+| 1.6     | 2026-08-01 | Prompt #2 de QA validado contra el repo real `folium_single_tenant` (commits `9e1b747`…`61d0d52`): build/vet/lint/tests en verde, los 5 commits de corrección hacen lo que documentan. Riesgos abiertos actualizados (DOCX/XLSX marcado como violación de spec no cubierta por el QA); nueva sección "Pendientes tras el QA" con candidatos a prompt #3 |
+| 1.5     | 2026-08-01 | Prompt #1 ejecutado en el repo `folium`; marcado en Estado Rápido y Tareas v1; nueva sección "Riesgos abiertos de la ejecución del prompt #1" con hallazgos de seguridad, consistencia de datos y build a resolver antes del QA |
+| 1.4     | 2026-08-01 | Pivote v1 single-tenant: nueva sección con decisiones cerradas y tareas; track SaaS/BFF marcado en pausa; decisiones 1 y 2 cerradas (golang-migrate, gofpdf); prompts #1 y #2 en referencias |
 | 1.3     | 2026-05-07 | BE.1 y BE.2 marcadas ✅ completas; nueva fila Backend Go — Seguridad en Estado Rápido; 2 nuevas entradas en ✅ Completado |
 | 1.2     | 2026-05-07 | Backend Go — Auth marcado ✅ completo; BFF Sesiones desbloqueado; sección Auth completada en Sprint Actual; 5 nuevas entradas en ✅ Completado |
 | 1.1     | 2026-05-07 | A.1-A.2 y FE.1 marcadas completas; nueva sección SSR en estado rápido; 9 nuevas entradas en ✅ Completado; React Islands movido a Fase 3 |
